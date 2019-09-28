@@ -65,6 +65,13 @@ object KorolevWorkshop extends App {
     }
   }
 
+  def renderBlogPost(blogPost: BlogPost) = {
+    'div(
+      'h3(blogPost.title),
+      'p(blogPost.body)
+    )
+  }
+
   private val config = KorolevServiceConfig[Future, BlogState, BlogEvent](
     router = Router.empty,
     stateStorage = StateStorage.forDeviceId { _ =>
@@ -80,12 +87,7 @@ object KorolevWorkshop extends App {
           }
         ),
         'div(
-          state.blogPosts map { blogPost =>
-            'div(
-              'h3(blogPost.title),
-              'p(blogPost.body)
-            )
-          }
+          state.blogPosts.map(renderBlogPost)
         ),
         'form(
           'input(newBlogPostTitle, 'type /= "text", 'placeholder /= "Title"),
