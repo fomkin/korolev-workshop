@@ -5,13 +5,15 @@ import java.util.UUID
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
+import akka.stream.scaladsl.Sink
 import akka.stream.{ActorMaterializer, Materializer}
 import com.github.korolevWorkshop.service.BlogPostService
-import com.github.korolevWorkshop.service.data.BlogPost
+import com.github.korolevWorkshop.service.data.{BlogEvent, BlogPost}
 import korolev._
 import korolev.akkahttp._
 import korolev.execution._
 import korolev.server._
+import korolev.state.EnvConfigurator
 import korolev.state.javaSerialization._
 import org.iq80.leveldb.Options
 import org.iq80.leveldb.impl.Iq80DBFactory
@@ -29,7 +31,7 @@ object KorolevWorkshop extends App {
   val db = Iq80DBFactory.factory.open(new File("db"), options)
   val blogPostService = new BlogPostService(db)
 
-  val ctx = Context[Future, BlogState, Any]
+  val ctx = Context[Future, BlogState, BlogEvent]
 
   import ctx._
   import ctx.symbolDsl._
@@ -51,9 +53,6 @@ object KorolevWorkshop extends App {
           body = newBody,
           date = 0
         )
-        _ <- access.transition { state =>
-          state.copy(blogPosts = state.blogPosts :+ blogPost)
-        }
         _ <- blogPostService.addBlogPost(blogPost)
         _ <- access.transition { state =>
           state.copy(inProgress = false)
@@ -66,7 +65,7 @@ object KorolevWorkshop extends App {
     }
   }
 
-  private val config = KorolevServiceConfig[Future, BlogState, Any](
+  private val config = KorolevServiceConfig[Future, BlogState, BlogEvent](
     router = Router.empty,
     stateStorage = StateStorage.forDeviceId { _ =>
       blogPostService.getAllBlogPosts.map { blogPosts =>
@@ -93,6 +92,24 @@ object KorolevWorkshop extends App {
           'input(newBlogPostBody, 'type /= "text", 'placeholder /= "Body"),
           'button("Submit"),
           event('submit)(onSubmit)
+        )
+      )
+    },
+    envConfigurator = EnvConfigurator { access =>
+      val sink = Sink.foreachAsync[BlogEvent](1) {
+        case BlogEvent.BlogPostAdded(blogPost) =>
+          access.transition { state =>
+            state.copy(blogPosts = state.blogPosts :+ blogPost)
+          }
+        case _ => Future.unit
+      }
+      blogPostService
+        .topic
+        .runWith(sink) // THIS IS WRONG
+
+      Future.successful(
+        EnvConfigurator.Env[Future, BlogEvent](
+          onDestroy = () => Future.unit,
         )
       )
     }

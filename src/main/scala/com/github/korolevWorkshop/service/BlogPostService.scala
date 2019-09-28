@@ -1,13 +1,19 @@
 package com.github.korolevWorkshop.service
 
-import com.github.korolevWorkshop.service.data.{BlogPost, BlogPostComment}
+import akka.stream.{Materializer, OverflowStrategy}
+import akka.stream.scaladsl.Source
+import com.github.korolevWorkshop.service.data.{BlogEvent, BlogPost, BlogPostComment}
 import org.iq80.leveldb.DB
 import zhukov.{Marshaller, Unmarshaller}
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 
-class BlogPostService(db: DB)(implicit ec: ExecutionContext) {
+class BlogPostService(db: DB)(implicit ec: ExecutionContext, mat: Materializer) {
+
+  val (topicRef, topic) = Source
+    .actorRef[BlogEvent](10, OverflowStrategy.fail)
+    .preMaterialize()
 
   def getAllBlogPosts: Future[Seq[BlogPost]] = Future {
     val i = db.iterator()
@@ -38,7 +44,7 @@ class BlogPostService(db: DB)(implicit ec: ExecutionContext) {
   }
 
   def addBlogPost(blogPost: BlogPost): Future[Unit] = Future {
-    throw new Exception("Something really bad happened")
+    topicRef ! BlogEvent.BlogPostAdded(blogPost)
     db.put(s"post${blogPost.id}".getBytes, Marshaller[BlogPost].write(blogPost))
   }
 

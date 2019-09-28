@@ -1,6 +1,4 @@
-package com.github.korolevWorkshop.web
-
-import com.github.korolevWorkshop.service.data.{BlogPost, BlogPostComment}
+package com.github.korolevWorkshop.service.data
 
 sealed trait BlogEvent
 
