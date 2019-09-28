@@ -37,11 +37,49 @@ object KorolevWorkshop extends App {
   val newBlogPostBody = elementId()
   val newBlogPostTitle = elementId()
 
+  def onSubmit(access: Access) = {
+    val res =
+      for {
+        _ <- access.transition { state =>
+          state.copy(inProgress = true)
+        }
+        newTitle <- access.valueOf(newBlogPostTitle)
+        newBody <- access.valueOf(newBlogPostBody)
+        blogPost = BlogPost(
+          id = Random.alphanumeric.take(10).mkString,
+          title = newTitle,
+          body = newBody,
+          date = 0
+        )
+        _ <- access.transition { state =>
+          state.copy(blogPosts = state.blogPosts :+ blogPost)
+        }
+        _ <- blogPostService.addBlogPost(blogPost)
+        _ <- access.transition { state =>
+          state.copy(inProgress = false)
+        }
+      } yield ()
+
+    res.recoverWith {
+      case e =>
+        access.transition(_.copy(error = Some(e.getMessage)))
+    }
+  }
+
   private val config = KorolevServiceConfig[Future, BlogState, Any](
     router = Router.empty,
-    stateStorage = StateStorage.default(BlogState(Nil)),
+    stateStorage = StateStorage.forDeviceId { _ =>
+      blogPostService.getAllBlogPosts.map { blogPosts =>
+        BlogState(blogPosts)
+      }
+    },
     render = { case state =>
       'body(
+        'div(
+          state.error map { error =>
+            'span('backgroundColor @= "red", error)
+          }
+        ),
         'div(
           state.blogPosts map { blogPost =>
             'div(
@@ -54,21 +92,7 @@ object KorolevWorkshop extends App {
           'input(newBlogPostTitle, 'type /= "text", 'placeholder /= "Title"),
           'input(newBlogPostBody, 'type /= "text", 'placeholder /= "Body"),
           'button("Submit"),
-          event('submit) { access =>
-            for {
-              newTitle <- access.valueOf(newBlogPostTitle)
-              newBody <- access.valueOf(newBlogPostBody)
-              blogPost = BlogPost(
-                id = Random.alphanumeric.take(10).mkString,
-                title = newTitle,
-                body = newBody,
-                date = 0
-              )
-              _ <- access.transition { state =>
-                state.copy(blogPosts = state.blogPosts :+ blogPost)
-              }
-            } yield ()
-          }
+          event('submit)(onSubmit)
         )
       )
     }

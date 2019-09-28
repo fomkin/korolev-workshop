@@ -38,6 +38,7 @@ class BlogPostService(db: DB)(implicit ec: ExecutionContext) {
   }
 
   def addBlogPost(blogPost: BlogPost): Future[Unit] = Future {
+    throw new Exception("Something really bad happened")
     db.put(s"post${blogPost.id}".getBytes, Marshaller[BlogPost].write(blogPost))
   }
 
