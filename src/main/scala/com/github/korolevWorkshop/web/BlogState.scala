@@ -1,5 +1,9 @@
 package com.github.korolevWorkshop.web
 
-case class BlogState()
+import com.github.korolevWorkshop.service.data.BlogPost
+
+case class BlogState(
+  blogPosts: Seq[BlogPost]
+)
 
 
